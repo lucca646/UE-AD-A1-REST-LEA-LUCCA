@@ -35,6 +35,7 @@ def write(new_movie):
         json.dump(full, f, indent=4)
         print("ok")
  
+ 
 print(read())
 
 new_movie = {
