@@ -27,6 +27,7 @@ def write(new_movie):
     with open('{}/databases/movies.json'.format("."), 'r') as jsf:
         full = json.load(jsf)
 
+
     with open('{}/databases/movies.json'.format("."), 'w') as f:
         full["movies"].append(new_movie)
         print(full)
