@@ -15,32 +15,53 @@ def read():
         return movies
 
 def readById(movieId):
-    for k in read():
-        if k == movieId:
-            return k
+    movies_list = read()
+    for movie in movies_list:
+        if movie["id"] == movieId:
+            return movie
 
 
-def write(movies):
+
+def write(new_movie):
+    
+    with open('{}/databases/movies.json'.format("."), 'r') as jsf:
+        full = json.load(jsf)
+
+
     with open('{}/databases/movies.json'.format("."), 'w') as f:
-        full = {}
-        full['movies']=movies
-        json.dump(full, f)
+        full["movies"].append(new_movie)
+        print(full)
 
+        json.dump(full, f, indent=4)
+        print("ok")
+ 
+ 
+print(read())
+
+new_movie = {
+      "title": "TTest",
+      "rating": 2.4,
+      "director": "Lea",
+      "id": "840d006c-3a57-5-b18f-9b713b073f3c"
+    }
+
+write(new_movie)
 
 
 @app.route("/movies", methods=['GET'])
 def getAllMovies():
+
     return read()
     
     
 @app.route("/movies/<movieId>", methods=['GET'])
 def getMovieById(movieId):
+    print("ici")
     return readById(movieId)
-    # return make_response("<h1 style='color:blue'>Welcome to the Movie service!</h1>",200)
 
 
-@app.route("/movies/<movie-id>", methods=['POST'])
-def createMovie():
+@app.route("/movies/<movieId>", methods=['POST'])
+def createMovie(movieId):
     data = request.get_json()
 
     director = data.get('director')
@@ -49,13 +70,13 @@ def createMovie():
     return make_response("<h1 style='color:blue'>Welcome to the Movie service!</h1>",200)
 
 
-@app.route("/movies/<movie-id>", methods=['PUT'])
-def updateMovie():
+@app.route("/movies/<movieId>", methods=['PUT'])
+def updateMovie(movieId):
     return make_response("<h1 style='color:blue'>Welcome to the Movie service!</h1>",200)
 
 
-@app.route("/movies/<movie-id>", methods=['DELETE'])
-def deleteMovieById():
+@app.route("/movies/<movieId>", methods=['DELETE'])
+def deleteMovieById(movieId):
     return make_response("<h1 style='color:blue'>Welcome to the Movie service!</h1>",200)
 
 if __name__ == "__main__":
