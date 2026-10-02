@@ -1,15 +1,19 @@
+from uuid import uuid4
+
 from flask import Flask, request, jsonify, make_response
 import json
 import sys
+from pathlib import Path
 from werkzeug.exceptions import NotFound
 
 app = Flask(__name__)
 
 PORT = 3200
 HOST = '0.0.0.0'
+MOVIES_FILE = Path(__file__).resolve().parent / 'databases' / 'movies.json'
 
 def read():
-    with open('{}/databases/movies.json'.format("."), 'r') as jsf:
+    with open(MOVIES_FILE, 'r') as jsf:
         movies = json.load(jsf)["movies"]
         print(movies)
         return movies
@@ -24,11 +28,11 @@ def readById(movieId):
 
 def write(new_movie):
     
-    with open('{}/databases/movies.json'.format("."), 'r') as jsf:
+    with open(MOVIES_FILE, 'r') as jsf:
         full = json.load(jsf)
 
 
-    with open('{}/databases/movies.json'.format("."), 'w') as f:
+    with open(MOVIES_FILE, 'w') as f:
         full["movies"].append(new_movie)
         print(full)
 
@@ -37,15 +41,6 @@ def write(new_movie):
  
  
 print(read())
-
-new_movie = {
-      "title": "TTest",
-      "rating": 2.4,
-      "director": "Lea",
-      "id": "840d006c-3a57-5-b18f-9b713b073f3c"
-    }
-
-write(new_movie)
 
 
 @app.route("/movies", methods=['GET'])
@@ -56,28 +51,48 @@ def getAllMovies():
     
 @app.route("/movies/<movieId>", methods=['GET'])
 def getMovieById(movieId):
-    print("ici")
     return readById(movieId)
 
 
-@app.route("/movies/<movieId>", methods=['POST'])
-def createMovie(movieId):
+@app.route("/movies", methods=['POST'])
+def createMovie():
     data = request.get_json()
 
-    director = data.get('director')
-    title = data.get('title')
-    rating = data.get('rating')
-    return make_response("<h1 style='color:blue'>Welcome to the Movie service!</h1>",200)
+    new_movie = {
+      "title": data.get('title'),
+      "rating": data.get('rating'),
+      "director": data.get('director'),
+      "id": str(uuid4())
+    }
+
+    write(new_movie)
+    return make_response(jsonify({"message": "Movie created successfully"}), 201)
 
 
 @app.route("/movies/<movieId>", methods=['PUT'])
 def updateMovie(movieId):
-    return make_response("<h1 style='color:blue'>Welcome to the Movie service!</h1>",200)
+    movie = readById(movieId)
+    if not movie:
+        raise NotFound("Movie with id {} not found".format(movieId))
+    else:
+        data = request.get_json()
+        movie["title"] = data.get('title', movie["title"])
+        movie["rating"] = data.get('rating', movie["rating"])
+        movie["director"] = data.get('director', movie["director"])
+        return make_response(jsonify({"message": "Movie updated successfully"}), 200)
 
 
 @app.route("/movies/<movieId>", methods=['DELETE'])
 def deleteMovieById(movieId):
-    return make_response("<h1 style='color:blue'>Welcome to the Movie service!</h1>",200)
+    movie = readById(movieId)
+    if not movie:
+        raise NotFound("Movie with id {} not found".format(movieId))
+    else:
+        movies_list = read()
+        movies_list.remove(movie)
+        with open(MOVIES_FILE, 'w') as f:
+            json.dump({"movies": movies_list}, f, indent=4)
+        return make_response(jsonify({"message": "Movie deleted successfully"}), 200)
 
 if __name__ == "__main__":
     #p = sys.argv[1]
