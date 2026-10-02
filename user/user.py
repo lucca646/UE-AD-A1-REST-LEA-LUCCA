@@ -1,22 +1,23 @@
 from uuid import uuid4
-
-from flask import Flask, request, jsonify, make_response
+import time
+from flask import Flask, request
 import requests
 import json
-from werkzeug.exceptions import NotFound
+from pathlib import Path
 
 app = Flask(__name__)
 
 PORT = 3203
 HOST = '0.0.0.0'
+USERS_FILE = Path(__file__).resolve().parent / 'databases' / 'users.json'
 
-with open('{}/databases/users.json'.format("."), "r") as jsf:
+
+with open(USERS_FILE, "r") as jsf:
    users = json.load(jsf)["users"]
 
 def read():
-    with open('{}/databases/users.json'.format("."), 'r') as jsf:
+    with open(USERS_FILE, 'r') as jsf:
         users = json.load(jsf)["users"]
-        print(users)
         return users
 
 def readById(userId):
@@ -29,20 +30,17 @@ def readById(userId):
 
 def write(new_user):
     
-    with open('{}/databases/users.json'.format("."), 'r') as jsf:
+    with open(USERS_FILE, 'r') as jsf:
         full = json.load(jsf)
 
 
-    with open('{}/databases/users.json'.format("."), 'w') as f:
+    with open(USERS_FILE, 'w') as f:
         full["users"].append(new_user)
-        print(full)
 
         json.dump(full, f, indent=4)
         print("ok")
  
  
-print(read())
-
 
 @app.route("/users", methods=['GET'])
 def getAllUsers():
@@ -66,33 +64,39 @@ def createUser():
     }
 
     write(new_user)
-    return make_response(jsonify({"message": "User created successfully"}), 201)
+    return new_user
 
 
 @app.route("/users/<userId>", methods=['PUT'])
 def updateUser(userId):
     user = readById(userId)
     if not user:
-        raise NotFound("User with id {} not found".format(userId))
+        return "user not found"
     else:
+        users_list = read()
+        users_list.remove(user)
         data = request.get_json()
-        user["name"] = data.get('name', user["name"])
-        user["last_active"] = data.get('last_active', user["last_active"])
-        user["id"] = data.get('name', user["name"])
-        return make_response(jsonify({"message": "User updated successfully"}), 200)
+        user["name"] = data.get('name')
+        user["last_active"] = int(time.time())
+
+        users_list.append(user)
+        with open(USERS_FILE, 'w') as f:
+            json.dump({"users": users_list}, f, indent=3)
+            
+        return user
 
 
 @app.route("/users/<userId>", methods=['DELETE'])
 def deleteUserById(userId):
     user = readById(userId)
     if not user:
-        raise NotFound("User with id {} not found".format(userId))
+        return "user not found"
     else:
         users_list = read()
         users_list.remove(user)
-        with open('{}/databases/users.json'.format("."), 'w') as f:
-            json.dump({"users": users_list}, f, indent=4)
-        return make_response(jsonify({"message": "User deleted successfully"}), 200)
+        with open(USERS_FILE, 'w') as f:
+            json.dump({"users": users_list}, f, indent=3)
+        return users_list
 
 
 if __name__ == "__main__":

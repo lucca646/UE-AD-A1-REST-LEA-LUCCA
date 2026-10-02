@@ -1,21 +1,21 @@
 from flask import Flask, request, jsonify, make_response
 import json
-from movie import movie
-from user.user import readById
+from pathlib import Path
 from werkzeug.exceptions import NotFound
+import time
 
 app = Flask(__name__)
 
 PORT = 3202
 HOST = '0.0.0.0'
+TIMES_FILE = Path(__file__).resolve().parent / 'databases' / 'times.json'
 
-with open('{}/databases/times.json'.format("."), "r") as jsf:
+with open(TIMES_FILE, "r") as jsf:
    schedule = json.load(jsf)["schedule"]
 
 def read():
-    with open('{}/databases/times.json'.format("."), 'r') as jsf:
-        times = json.load(jsf)["times"]
-        print(times)
+    with open(TIMES_FILE, 'r') as jsf:
+        times = json.load(jsf)["schedule"]
         return times
 
 def readByDate(date):
@@ -27,21 +27,17 @@ def readByDate(date):
 
 def write(new_time):
     
-    with open('{}/databases/times.json'.format("."), 'r') as jsf:
+    with open(TIMES_FILE, 'r') as jsf:
         full = json.load(jsf)
 
 
-    with open('{}/databases/times.json'.format("."), 'w') as f:
-        full["times"].append(new_time)
-        print(full)
+    with open(TIMES_FILE, 'w') as f:
+        full["schedule"].append(new_time)
 
         json.dump(full, f, indent=4)
         print("ok")
  
  
-print(read())
-
-
 @app.route("/times", methods=['GET'])
 def getAllTimes():
 
@@ -57,27 +53,35 @@ def getTimeByDate(timeDate):
 def createTime():
     data = request.get_json()
 
-    new_time = {
-      "date": data.get('date'),
-      "movies": data.get('movies')
-    }
+    time_already_exists = readByDate(data.get('date'))
+    if time_already_exists:
+        times_list = read()
+        times_list.remove(time_already_exists)
+        time_already_exists["movies"].extend(data.get('movies'))
+        times_list.append(time_already_exists)
+        with open(TIMES_FILE, 'w') as f:
+            json.dump({"schedule": times_list}, f, indent=3)
+    else:
+        new_time = {
+        "date": data.get('date'),
+        "movies": data.get('movies')
+        }
+        write(new_time)
 
-    write(new_time)
-    return make_response(jsonify({"message": "Schedule created successfully"}), 201)
+    return new_time
 
 
 @app.route("/times/<timeDate>", methods=['DELETE'])
 def deleteTimeByDate(timeDate):
     time = readByDate(timeDate)
     if not time:
-        raise NotFound("Time with date {} not found".format(timeDate))
+        raise NotFound("schedule not found")
     else:
         times_list = read()
         times_list.remove(time)
-        with open('{}/databases/times.json'.format("."), 'w') as f:
-            json.dump({"times": times_list}, f, indent=4)
-        return make_response(jsonify({"message": "Time deleted successfully"}), 200)
-
+        with open(TIMES_FILE, 'w') as f:
+            json.dump({"schedule": times_list}, f, indent=3)
+        return times_list
 
 if __name__ == "__main__":
    print("Server running in port %s"%(PORT))
