@@ -25,16 +25,22 @@ def read():
 
 def readByUserId(user_id):
     bookings_list = read()
+    try:
+        requests.get(
+            f"{USERS_API_URL}/users/{user_id}"
+        ).json()
+    except requests.RequestException:
+        return "Cet utilisateur.rice n'existe pas"
     for booking in bookings_list:
         if booking["userid"] == user_id:
             return booking
+    return "Cet utilisateur.rice n'a aucune réservation"
 
 
 def write(new_booking):
 
     with open(BOOKINGS_FILE, 'r') as jsf:
         full = json.load(jsf)
-
 
     with open(BOOKINGS_FILE, 'w') as f:
         full["bookings"].append(new_booking)
@@ -43,13 +49,13 @@ def write(new_booking):
         print("ok")
 
 
-@app.route("/bookings/<userId>", methods=['GET'])
-def getAllBookings(user_id):
+@app.route("/bookings/all/<userId>", methods=['GET'])
+def getAllBookings(userId):
     try:
         user_response = requests.get(
-            f"{USERS_API_URL}/users/{user_id}"
+            f"{USERS_API_URL}/users/{userId}"
         ).json()
-    except requests.RequestException as error:
+    except requests.RequestException:
         return "Connexion avec l'API impossible"
 
     if user_response.get('id') == "admin":
@@ -68,62 +74,73 @@ def createBooking():
     data = request.get_json()
 
     user_id = data.get('userid')
-    date = data.get('date')
-    movie_id = data.get('movies')
-    
+    date = data.get('dates')[0]["date"]
+    movie_id = data.get('dates')[0]["movies"][0]
+
+    does_user_exist = readByUserId(user_id)
+    if isinstance(does_user_exist, str):
+        return does_user_exist
+
     try:
         schedule_response = requests.get(
             f"{SCHEDULE_API_URL}/times/{date}"
         ).json()
-        user_response = requests.get(
-                    f"{USERS_API_URL}/users/{user_id}"
-                ).json()
-        movie_response = requests.get(
-                            f"{MOVIES_API_URL}/movies/{movie_id}"
-                        ).json()
-    except requests.RequestException as error:
+        requests.get(
+            f"{MOVIES_API_URL}/movies/{movie_id}"
+        ).json()
+    except requests.RequestException:
         return "Connexion avec l'API impossible", 503
-
-    #TODO verif ce que renvoie l'url quand user_id n'existe pas et renvoyer une erreur 404
 
     schedule_movies = schedule_response.get('movies', [])
     if movie_id not in schedule_movies:
         return f"Le film {movie_id} n'est pas disponible à la date {date}", 400
     else:
         booking_already_exists = readByUserId(user_id)
-        if booking_already_exists:
+        if not isinstance(booking_already_exists, str):
             bookings_list = read()
             bookings_list.remove(booking_already_exists)
-            booking_already_exists["dates"].extend(data.get('dates'))
-            if date not in [d["date"] for d in booking_already_exists["dates"]]:
-                booking_already_exists["dates"].append({"date": date, "movies": [movie_id]})
-            else:
-                for d in booking_already_exists["dates"]:
-                    if d["date"] == date:
-                        d["movies"].append(movie_id)
+            # vérifie si la date est déjà présente dans les réservations sinon renvoie none
+            booking_date = next(
+                (date_entry for date_entry in booking_already_exists["dates"]
+                 if date_entry["date"] == date),
+                None
+            )
+            # si la date n'existe pas on la rajoute
+            if booking_date is None:
+                booking_already_exists["dates"].append({
+                    "date": date,
+                    "movies": [movie_id]
+                })
+            # si la date existe mais que le film n'est pas encore réservé on l'ajoute
+            elif movie_id not in booking_date["movies"]:
+                booking_date["movies"].append(movie_id)
+
+            bookings_list.append(booking_already_exists)
             with open(BOOKINGS_FILE, 'w') as f:
                 json.dump({"bookings": bookings_list}, f, indent=3)
         else:
             new_booking = {
-            "date": data.get('date'),
-            "movies": data.get('movies')
+            "userid": user_id,
+            "dates": [{"date": date, "movies": [movie_id]}]
             }
             write(new_booking)
 
+    bookings_list = read()
     return bookings_list
 
 
 @app.route("/bookings/<userId>", methods=['DELETE'])
 def deleteBookingByUserId(userId):
-    booking = readByUserId(userId)
-    if not booking:
-        raise NotFound("bookings not found")
-    else:
-        bookings_list = read()
-        bookings_list.remove(booking)
-        with open(BOOKINGS_FILE, 'w') as f:
-            json.dump({"bookings": bookings_list}, f, indent=3)
-        return bookings_list
+    bookings_list = read()
+    if userId not in [booking["userid"] for booking in bookings_list]:
+        return "Cet utilisateur.rice n'a aucune réservation"
+    for booking in bookings_list:
+        if booking["userid"] == userId:
+            bookings_list.remove(booking)
+            break
+    with open(BOOKINGS_FILE, 'w') as f:
+        json.dump({"bookings": bookings_list}, f, indent=3)
+    return bookings_list
 
 if __name__ == "__main__":
    print("Server running in port %s"%(PORT))
